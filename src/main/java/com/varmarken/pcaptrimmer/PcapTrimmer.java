@@ -1,11 +1,15 @@
 package com.varmarken.pcaptrimmer;
 
 import org.pcap4j.core.*;
-import org.pcap4j.packet.DnsPacket;
 import org.pcap4j.packet.namednumber.DataLinkType;
 
+import javax.tools.JavaCompiler;
+import javax.tools.ToolProvider;
 import java.io.File;
 import java.io.FileNotFoundException;
+import java.net.MalformedURLException;
+import java.net.URL;
+import java.net.URLClassLoader;
 import java.util.function.Function;
 
 /**
@@ -14,21 +18,84 @@ import java.util.function.Function;
  */
 public class PcapTrimmer implements PacketListener {
 
+    private static final String ARG0_NAME = "inputPcap";
+    private static final String ARG1_NAME = "outputPcap";
+    private static final String ARG2_NAME = "filterImplementation";
+    private static final String ARG3_NAME = "filterImplementationFullClassName";
+
+    private static final String USAGE_HINT = String.format("Usage: java %s %s %s %s %s", PcapTrimmer.class.getName(),
+            ARG0_NAME, ARG1_NAME, ARG2_NAME, ARG3_NAME);
+
+    private static final String SRC_FILE_EXTENSION = ".java";
+    private static final String CLASS_FILE_EXTENSION = ".class";
+
+
     public static void main(String[] args) throws FileNotFoundException, NotOpenException, PcapNativeException {
-        // TODO let client specify packet filter.
-        if (args.length < 2) {
-            System.out.printf("Usage: java %s inputPcap outputPcap%s", PcapTrimmer.class.getName(), System.lineSeparator());
+        if (args.length < 4) {
+            System.out.println(USAGE_HINT);
             return;
         }
-        String inFile = args[0];
-        String outFile = args[1];
+        String inputPcap = args[0];
+        String outputPcap = args[1];
+        String filterImpl = args[2];
+        String filterImplFullClassName = args[3];
+        // User-defined filter (Function<PcapPacket, Boolean> implementation) should be a java source or class file.
+        if (!isSourceFile(filterImpl) && !isClassFile(filterImpl)) {
+            System.out.printf("Invalid value for '%s' arg. Expected a '.java' or '.class' file.%s",
+                    ARG2_NAME, System.lineSeparator());
+            System.out.println(USAGE_HINT);
+            return;
+        }
+        if (isSourceFile(filterImpl)) {
+            // User specified a source file, so compile it.
+            JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
+            int compilationResult = compiler.run(null, null, null, filterImpl);
+            if (compilationResult != 0) {
+                System.err.printf("Compilation of '%s' failed with error code %d", filterImpl, compilationResult);
+                System.err.println();
+                return;
+            }
+            // Update the filter implementation filename to point to the newly created .class file.
+            // This class file should reside in the same directory as the source file.
+            filterImpl = filterImpl.substring(0, filterImpl.lastIndexOf(SRC_FILE_EXTENSION)) + CLASS_FILE_EXTENSION;
 
-        // Simple example that makes the output pcap file only contain DNS traffic.
-        PcapTrimmer pcapTrimmer = new PcapTrimmer(inFile, outFile, (pkt) -> {
-            DnsPacket dnsPacket = pkt.get(DnsPacket.class);
-            return dnsPacket != null;
-        });
+        }
+        Function<PcapPacket, Boolean> filter;
+        try {
+            // Load the (potentially freshly) compiled filter implementation
+            URLClassLoader classLoader = URLClassLoader.newInstance(
+                    new URL[]{new File(filterImpl).getParentFile().toURI().toURL()});
+            Class<?> filterImplClass = Class.forName(filterImplFullClassName, true, classLoader);
+            Object untypedInstance = filterImplClass.getDeclaredConstructor().newInstance();
+            filter = (Function<PcapPacket, Boolean>) untypedInstance;
+        } catch (ReflectiveOperationException roe) {
+            System.err.println("Could not instantiate provided filter implementation. Exception details follow.");
+            System.err.println(roe.getMessage());
+            roe.printStackTrace();
+            return;
+        } catch (MalformedURLException mue) {
+            System.err.printf("Could not convert arg '%s' to URL when attempting to load filter implementation.",
+                    ARG2_NAME);
+            System.err.println();
+            System.err.println(mue.getMessage());
+            mue.printStackTrace();
+            return;
+        } catch (ClassCastException cce) {
+            System.err.printf("Provided filter implementation does not conform to interface %s<%s, %s>.",
+                    Function.class.getName(), PcapPacket.class.getName(), Boolean.class.getName());
+            return;
+        }
+        // Trim the pcap using the provided filter.
+        PcapTrimmer pcapTrimmer = new PcapTrimmer(inputPcap, outputPcap, filter);
         pcapTrimmer.trimPcap();
+    }
+
+    private static boolean isSourceFile(String filename) {
+        return filename.endsWith(SRC_FILE_EXTENSION);
+    }
+
+    private static boolean isClassFile(String filename) {
+        return filename.endsWith(CLASS_FILE_EXTENSION);
     }
 
     /**
