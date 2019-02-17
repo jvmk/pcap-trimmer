@@ -7,14 +7,13 @@ import javax.tools.JavaCompiler;
 import javax.tools.ToolProvider;
 import java.io.File;
 import java.io.FileNotFoundException;
-import java.net.MalformedURLException;
-import java.net.URL;
-import java.net.URLClassLoader;
 import java.util.function.Function;
 
 /**
- * Given an input pcap file {@code inFile}, and output pcap file {@code outFile}, and a packet filter {@code filter},
- * writes those packets in {@code inFile} that passes through {@code filter} to {@code outFile}.
+ * Given an input pcap file {@code inputPcap}, an output pcap file {@code outputPcap}, and a packet filter
+ * {@code filter}, writes those packets in {@code inputPcap} that passes through {@code filter} to {@code outputPcap}.
+ *
+ * @author Janus Varmarken
  */
 public class PcapTrimmer implements PacketListener {
 
@@ -63,8 +62,7 @@ public class PcapTrimmer implements PacketListener {
         Function<PcapPacket, Boolean> filter;
         try {
             // Load the (potentially freshly) compiled filter implementation
-            URLClassLoader classLoader = URLClassLoader.newInstance(
-                    new URL[]{new File(filterImpl).getParentFile().toURI().toURL()});
+            SingleDirectoryClassLoader classLoader = new SingleDirectoryClassLoader(new File(filterImpl).getParentFile());
             Class<?> filterImplClass = Class.forName(filterImplFullClassName, true, classLoader);
             Object untypedInstance = filterImplClass.getDeclaredConstructor().newInstance();
             filter = (Function<PcapPacket, Boolean>) untypedInstance;
@@ -72,13 +70,6 @@ public class PcapTrimmer implements PacketListener {
             System.err.println("Could not instantiate provided filter implementation. Exception details follow.");
             System.err.println(roe.getMessage());
             roe.printStackTrace();
-            return;
-        } catch (MalformedURLException mue) {
-            System.err.printf("Could not convert arg '%s' to URL when attempting to load filter implementation.",
-                    ARG2_NAME);
-            System.err.println();
-            System.err.println(mue.getMessage());
-            mue.printStackTrace();
             return;
         } catch (ClassCastException cce) {
             System.err.printf("Provided filter implementation does not conform to interface %s<%s, %s>.",
