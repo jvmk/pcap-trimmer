@@ -8,6 +8,7 @@ import javax.tools.ToolProvider;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.util.function.Function;
+import com.varmarken.pcapreader.PcapFileReader;
 
 /**
  * Given an input pcap file {@code inputPcap}, an output pcap file {@code outputPcap}, and a packet filter

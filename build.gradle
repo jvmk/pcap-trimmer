@@ -12,6 +12,8 @@ mainClassName = 'com.varmarken.pcaptrimmer.PcapTrimmer'
 
 repositories {
     mavenCentral()
+    // Tool for packaging a github repo to make it possible to import it as a dependency
+    maven { url 'https://jitpack.io' }
 }
 
 dependencies {
@@ -23,5 +25,6 @@ dependencies {
     // pcap4j logging dependencies
     implementation 'org.slf4j:slf4j-api:1.7.25'
     implementation 'org.slf4j:slf4j-simple:1.7.25'
-    
+
+    implementation 'com.github.jvmk:pcap-reader:v0.0.1'
 }
