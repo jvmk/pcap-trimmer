@@ -20,8 +20,8 @@ dependencies {
     testCompile group: 'junit', name: 'junit', version: '4.12'
 
     // Java tcpdump wrapper and packet+pcap parser
-    implementation 'org.pcap4j:pcap4j-core:2.0.0-alpha.2'
-    implementation 'org.pcap4j:pcap4j-packetfactory-static:2.0.0-alpha.2'
+    api 'org.pcap4j:pcap4j-core:2.0.0-alpha.2'
+    api 'org.pcap4j:pcap4j-packetfactory-static:2.0.0-alpha.2'
     // pcap4j logging dependencies
     implementation 'org.slf4j:slf4j-api:1.7.25'
     implementation 'org.slf4j:slf4j-simple:1.7.25'
